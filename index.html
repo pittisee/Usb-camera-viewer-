@@ -75,24 +75,57 @@
         const brightness = document.getElementById('brightness');
         const message = document.getElementById('message');
 
+        // Request access to the default camera and attempt to switch to USB webcam
         navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => {
+                // Display default camera stream initially
                 video.srcObject = stream;
                 message.style.display = 'none';
+                // Enumerate all video input devices
+                return navigator.mediaDevices.enumerateDevices();
+            })
+            .then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                // Find a device with "usb" or "webcam" in the label (case-insensitive)
+                const usbWebcam = videoDevices.find(device => 
+                    device.label.toLowerCase().includes('usb') || device.label.toLowerCase().includes('webcam')
+                );
+                if (usbWebcam) {
+                    // Get the current deviceId from the stream
+                    const currentTrack = video.srcObject.getVideoTracks()[0];
+                    const currentDeviceId = currentTrack.getSettings().deviceId;
+                    if (currentDeviceId !== usbWebcam.deviceId) {
+                        // Stop the current stream
+                        video.srcObject.getTracks().forEach(track => track.stop());
+                        // Request a new stream with the USB webcam
+                        return navigator.mediaDevices.getUserMedia({ 
+                            video: { deviceId: { exact: usbWebcam.deviceId } } 
+                        });
+                    }
+                }
+                return Promise.resolve(null); // No need to change the stream
+            })
+            .then(newStream => {
+                if (newStream) {
+                    video.srcObject = newStream;
+                }
             })
             .catch(error => {
                 console.error('Error accessing webcam:', error);
                 message.textContent = 'Could not access the webcam. Please make sure it is connected and you have granted permission.';
             });
 
+        // Toggle menu on video click
         video.addEventListener('click', () => {
             menu.classList.toggle('show');
         });
 
+        // Prevent menu click from propagating to video
         menu.addEventListener('click', (e) => {
             e.stopPropagation();
         });
 
+        // Update video filters based on slider values
         function updateFilters() {
             const sat = saturation.value;
             const con = contrast.value;
@@ -100,10 +133,12 @@
             video.style.filter = `saturate(${sat}%) contrast(${con}%) brightness(${bri}%)`;
         }
 
+        // Add event listeners to sliders
         saturation.addEventListener('input', updateFilters);
         contrast.addEventListener('input', updateFilters);
         brightness.addEventListener('input', updateFilters);
 
+        // Initialize filters
         updateFilters();
     </script>
 </body>
