@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        video {
+            width: 640px;
+            height: 480px;
+            margin: 20px auto;
+            display: block;
+            border: 1px solid #ccc;
+        }
+
+        div {
+            margin: 10px;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        input[type="range"] {
+            width: 200px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1>Webcam Viewer</h1>
+    <p>Please allow camera access to view the webcam feed.</p>
+    <video id="video" autoplay></video>
+    <div>
+        <label for="saturation">Saturation:</label>
+        <input type="range" id="saturation" min="0" max="200" value="100">
+    </div>
+    <div>
+        <label for="contrast">Contrast:</label>
+        <input type="range" id="contrast" min="0" max="200" value="100">
+    </div>
+    <div>
+        <label for="brightness">Brightness:</label>
+        <input type="range" id="brightness" min="0" max="200" value="100">
+    </div>
+    <script>
+        // Get references to the video and range input elements
+        const video = document.getElementById('video');
+        const saturation = document.getElementById('saturation');
+        const contrast = document.getElementById('contrast');
+        const brightness = document.getElementById('brightness');
+
+        // Request access to the webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream; // Set the video source to the webcam stream
+            })
+            .catch(error => {
+                console.error('Error accessing webcam:', error);
+                alert('Could not access the webcam. Please ensure it is connected and permissions are granted.');
+            });
+
+        // Function to update the video filters based on slider values
+        function updateFilters() {
+            const sat = saturation.value;
+            const con = contrast.value;
+            const bri = brightness.value;
+            video.style.filter = `saturate(${sat}%) contrast(${con}%) brightness(${bri}%)`;
+        }
+
+        // Add event listeners to update filters when sliders are moved
+        saturation.addEventListener('input', updateFilters);
+        contrast.addEventListener('input', updateFilters);
+        brightness.addEventListener('input', updateFilters);
+
+        // Set initial filter values
+        updateFilters();
+    </script>
+</body>
+</html>
