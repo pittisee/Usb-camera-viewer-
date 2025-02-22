@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Viewer</title>
+    <title>Webcam Viewer with Camera Selection</title>
     <style>
         body {
             margin: 0;
@@ -55,6 +55,10 @@
     <p id="message">Please allow camera access to view the webcam feed.</p>
     <div id="menu">
         <div>
+            <label for="cameraSelect">Camera:</label>
+            <select id="cameraSelect"></select>
+        </div>
+        <div>
             <label for="saturation">Saturation:</label>
             <input type="range" id="saturation" min="0" max="200" value="100">
         </div>
@@ -70,75 +74,87 @@
     <script>
         const video = document.getElementById('video');
         const menu = document.getElementById('menu');
+        const cameraSelect = document.getElementById('cameraSelect');
         const saturation = document.getElementById('saturation');
         const contrast = document.getElementById('contrast');
         const brightness = document.getElementById('brightness');
         const message = document.getElementById('message');
 
-        // Request access to the default camera and attempt to switch to USB webcam
+        // Start with the default camera
         navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => {
-                // Display default camera stream initially
                 video.srcObject = stream;
                 message.style.display = 'none';
-                // Enumerate all video input devices
-                return navigator.mediaDevices.enumerateDevices();
-            })
-            .then(devices => {
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                // Find a device with "usb" or "webcam" in the label (case-insensitive)
-                const usbWebcam = videoDevices.find(device => 
-                    device.label.toLowerCase().includes('usb') || device.label.toLowerCase().includes('webcam')
-                );
-                if (usbWebcam) {
-                    // Get the current deviceId from the stream
-                    const currentTrack = video.srcObject.getVideoTracks()[0];
-                    const currentDeviceId = currentTrack.getSettings().deviceId;
-                    if (currentDeviceId !== usbWebcam.deviceId) {
-                        // Stop the current stream
-                        video.srcObject.getTracks().forEach(track => track.stop());
-                        // Request a new stream with the USB webcam
-                        return navigator.mediaDevices.getUserMedia({ 
-                            video: { deviceId: { exact: usbWebcam.deviceId } } 
-                        });
-                    }
-                }
-                return Promise.resolve(null); // No need to change the stream
-            })
-            .then(newStream => {
-                if (newStream) {
-                    video.srcObject = newStream;
-                }
+                populateCameraSelect(stream);
             })
             .catch(error => {
                 console.error('Error accessing webcam:', error);
-                message.textContent = 'Could not access the webcam. Please make sure it is connected and you have granted permission.';
+                message.textContent = 'Could not access the webcam. Please ensure it’s connected and you’ve allowed camera access.';
             });
 
-        // Toggle menu on video click
+        // Populate the camera selection dropdown
+        function populateCameraSelect(currentStream) {
+            const currentTrack = currentStream.getVideoTracks()[0];
+            const currentDeviceId = currentTrack.getSettings().deviceId;
+
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    cameraSelect.innerHTML = ''; // Clear any existing options
+                    videoDevices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Camera ${device.deviceId}`;
+                        if (device.deviceId === currentDeviceId) {
+                            option.selected = true;
+                        }
+                        cameraSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error listing devices:', error);
+                    message.textContent = 'Unable to list cameras.';
+                    message.style.display = 'block';
+                });
+        }
+
+        // Switch camera when a new one is selected
+        cameraSelect.addEventListener('change', () => {
+            const selectedDeviceId = cameraSelect.value;
+            video.srcObject.getTracks().forEach(track => track.stop()); // Stop current stream
+            navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: selectedDeviceId } } })
+                .then(newStream => {
+                    video.srcObject = newStream;
+                    message.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error switching camera:', error);
+                    message.textContent = 'Failed to switch to the selected camera.';
+                    message.style.display = 'block';
+                });
+        });
+
+        // Show/hide menu on video click
         video.addEventListener('click', () => {
             menu.classList.toggle('show');
         });
 
-        // Prevent menu click from propagating to video
+        // Prevent menu clicks from hiding the menu
         menu.addEventListener('click', (e) => {
             e.stopPropagation();
         });
 
-        // Update video filters based on slider values
+        // Apply filter adjustments
         function updateFilters() {
-            const sat = saturation.value;
-            const con = contrast.value;
-            const bri = brightness.value;
-            video.style.filter = `saturate(${sat}%) contrast(${con}%) brightness(${bri}%)`;
+            video.style.filter = `saturate(${saturation.value}%) contrast(${contrast.value}%) brightness(${brightness.value}%)`;
         }
 
-        // Add event listeners to sliders
+        // Update filters when sliders change
         saturation.addEventListener('input', updateFilters);
         contrast.addEventListener('input', updateFilters);
         brightness.addEventListener('input', updateFilters);
 
-        // Initialize filters
+        // Apply initial filter settings
         updateFilters();
     </script>
 </body>
