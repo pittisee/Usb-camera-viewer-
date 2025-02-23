@@ -230,6 +230,20 @@
           }, 2000);
           // After a successful USB connection, re-enumerate devices.
           await populateCameraSelect();
+          
+          // Try to match the USB device's product name with a media device label.
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+          const matchingDevice = videoDevices.find(d => 
+            d.label.toLowerCase().includes(device.productName.toLowerCase())
+          );
+          if (matchingDevice) {
+            cameraSelect.value = matchingDevice.deviceId;
+            await switchCamera(matchingDevice.deviceId);
+          } else {
+            message.textContent = 'USB camera is connected but not recognized as a video input.';
+            message.style.display = 'block';
+          }
         } catch (error) {
           console.error('USB device request error:', error);
           message.textContent = 'Error connecting USB camera.';
