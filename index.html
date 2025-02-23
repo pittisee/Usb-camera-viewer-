@@ -51,7 +51,7 @@
   </style>
 </head>
 <body>
-  <!-- Added playsinline and muted for better mobile compatibility -->
+  <!-- Added playsinline and muted for mobile compatibility -->
   <video id="video" autoplay playsinline muted></video>
   <p id="message">Please allow camera access to view the webcam feed.</p>
   <div id="menu">
@@ -81,35 +81,51 @@
     const brightness = document.getElementById('brightness');
     const message = document.getElementById('message');
 
-    // Request the video stream with a mobile-friendly constraint (front camera by default)
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-      .then(stream => {
-        video.srcObject = stream;
-        message.style.display = 'none';
-        populateCameraSelect(stream);
-      })
-      .catch(error => {
-        console.error('Error accessing webcam:', error);
-        message.textContent = 'Could not access the webcam. Please ensure it’s connected and you’ve allowed camera access.';
-      });
+    let currentStream;
 
-    // Populate the camera selection dropdown
-    function populateCameraSelect(currentStream) {
-      const currentTrack = currentStream.getVideoTracks()[0];
-      const currentDeviceId = currentTrack.getSettings().deviceId;
+    // Start video stream with minimal constraints so that all available cameras can be detected
+    function startStream() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          currentStream = stream;
+          video.srcObject = stream;
+          message.style.display = 'none';
+          populateCameraSelect();
+          updateFilters();
+        })
+        .catch(error => {
+          console.error('Error accessing webcam:', error);
+          message.textContent = 'Could not access the webcam. Please ensure it’s connected and you’ve allowed camera access.';
+        });
+    }
+
+    // Populate the camera selection dropdown and check for external USB cameras
+    function populateCameraSelect() {
       navigator.mediaDevices.enumerateDevices()
         .then(devices => {
           const videoDevices = devices.filter(device => device.kind === 'videoinput');
-          cameraSelect.innerHTML = ''; // Clear existing options
+          cameraSelect.innerHTML = '';
+          let externalDeviceId = null;
           videoDevices.forEach(device => {
             const option = document.createElement('option');
             option.value = device.deviceId;
             option.text = device.label || `Camera ${device.deviceId}`;
-            if (device.deviceId === currentDeviceId) {
-              option.selected = true;
-            }
             cameraSelect.appendChild(option);
+            // Check if the device label contains 'usb'
+            if (device.label && device.label.toLowerCase().includes('usb')) {
+              externalDeviceId = device.deviceId;
+            }
           });
+          // Set the selected option based on the current stream
+          if (currentStream) {
+            const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
+            cameraSelect.value = currentDeviceId;
+            // If an external USB camera is detected and it's not already in use, switch to it
+            if (externalDeviceId && currentDeviceId !== externalDeviceId) {
+              cameraSelect.value = externalDeviceId;
+              switchCamera(externalDeviceId);
+            }
+          }
         })
         .catch(error => {
           console.error('Error listing devices:', error);
@@ -118,46 +134,54 @@
         });
     }
 
-    // Switch camera when a new one is selected
-    cameraSelect.addEventListener('change', () => {
-      const selectedDeviceId = cameraSelect.value;
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
+    // Switch camera to the selected device
+    function switchCamera(deviceId) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
-      navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: selectedDeviceId } } })
-        .then(newStream => {
-          video.srcObject = newStream;
+      navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } })
+        .then(stream => {
+          currentStream = stream;
+          video.srcObject = stream;
           message.style.display = 'none';
+          // Refresh the device list so labels update correctly
+          populateCameraSelect();
+          updateFilters();
         })
         .catch(error => {
           console.error('Error switching camera:', error);
           message.textContent = 'Failed to switch to the selected camera.';
           message.style.display = 'block';
         });
-    });
+    }
 
-    // Show/hide menu on video click
-    video.addEventListener('click', () => {
-      menu.classList.toggle('show');
-    });
-
-    // Prevent menu clicks from hiding the menu
-    menu.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-
-    // Apply filter adjustments
+    // Update filter effects on the video element
     function updateFilters() {
       video.style.filter = `saturate(${saturation.value}%) contrast(${contrast.value}%) brightness(${brightness.value}%)`;
     }
 
-    // Update filters when sliders change
+    // Event listeners for filter adjustments and camera selection
     saturation.addEventListener('input', updateFilters);
     contrast.addEventListener('input', updateFilters);
     brightness.addEventListener('input', updateFilters);
 
-    // Apply initial filter settings
-    updateFilters();
+    cameraSelect.addEventListener('change', () => {
+      const selectedDeviceId = cameraSelect.value;
+      switchCamera(selectedDeviceId);
+    });
+
+    // Toggle the settings menu when video is clicked
+    video.addEventListener('click', () => {
+      menu.classList.toggle('show');
+    });
+
+    // Prevent clicks on the menu from closing it
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Start the stream when the page loads
+    startStream();
   </script>
 </body>
 </html>
