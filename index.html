@@ -109,13 +109,12 @@
       }
     }
 
-    // Enumerate devices and populate the dropdown. Look for external cameras.
+    // Enumerate devices and populate the dropdown.
     async function populateCameraSelect() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter((d) => d.kind === 'videoinput');
         console.log('Video devices:', videoDevices);
-        // Clear the camera dropdown using replaceChildren for better performance.
         cameraSelect.replaceChildren();
 
         videoDevices.forEach((device) => {
@@ -125,12 +124,11 @@
           cameraSelect.appendChild(option);
         });
 
-        // Check for external cameras using common keywords to prioritize USB/external cameras.
+        // Auto-switch to an external camera if detected.
         const externalCamera = videoDevices.find((device) => {
           const label = device.label.toLowerCase();
           return label.includes('usb') || label.includes('external') || label.includes('uvc');
         });
-
         if (externalCamera && currentStream) {
           const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
           if (currentDeviceId !== externalCamera.deviceId) {
@@ -148,50 +146,41 @@
     }
 
     // Switch the active camera by stopping the current stream and starting a new one.
-    // First, it tries with HD constraints; if that fails, it falls back to default constraints.
+    // For external (USB) cameras, we use default constraints; otherwise, we request HD constraints.
     async function switchCamera(deviceId) {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
         currentStream = null;
       }
       try {
-        const constraintsHD = {
-          video: {
-            deviceId: { exact: deviceId },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        };
-        let stream = await navigator.mediaDevices.getUserMedia(constraintsHD);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const selectedDevice = devices.find((d) => d.deviceId === deviceId);
+        let constraints;
+        if (selectedDevice && selectedDevice.label.toLowerCase().includes('usb')) {
+          // For USB cameras, use default constraints.
+          constraints = { video: { deviceId: { exact: deviceId } } };
+          console.log('Switching to USB camera with default constraints.');
+        } else {
+          // For other cameras, request HD resolution.
+          constraints = {
+            video: {
+              deviceId: { exact: deviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          };
+          console.log('Switching to camera with HD constraints.');
+        }
+        let stream = await navigator.mediaDevices.getUserMedia(constraints);
         currentStream = stream;
         video.srcObject = stream;
         message.style.display = 'none';
         await populateCameraSelect();
         updateFilters();
       } catch (error) {
-        console.error('Error switching camera with HD constraints:', error);
-        // Fallback: try without HD constraints if HD fails.
-        try {
-          const fallbackConstraints = {
-            video: {
-              deviceId: { exact: deviceId }
-            }
-          };
-          let stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-          currentStream = stream;
-          video.srcObject = stream;
-          message.textContent = 'HD constraints not supported; using default resolution.';
-          message.style.display = 'block';
-          setTimeout(() => {
-            message.style.display = 'none';
-          }, 2000);
-          await populateCameraSelect();
-          updateFilters();
-        } catch (fallbackError) {
-          console.error('Error switching camera with fallback constraints:', fallbackError);
-          message.textContent = 'Failed to switch to the selected camera.';
-          message.style.display = 'block';
-        }
+        console.error('Error switching camera:', error);
+        message.textContent = 'Failed to switch to the selected camera.';
+        message.style.display = 'block';
       }
     }
 
@@ -217,24 +206,18 @@
     usbButton.addEventListener('click', async () => {
       if ('usb' in navigator) {
         try {
-          // Request a USB device from the video class (classCode 0x0e)
           const device = await navigator.usb.requestDevice({
             filters: [{ classCode: 0x0e }]
           });
           console.log('USB device selected:', device);
-          // Provide user feedback on successful USB connection.
           message.textContent = 'USB camera connected successfully.';
           message.style.display = 'block';
-          setTimeout(() => {
-            message.style.display = 'none';
-          }, 2000);
-          // After a successful USB connection, re-enumerate devices.
+          setTimeout(() => { message.style.display = 'none'; }, 2000);
           await populateCameraSelect();
-          
-          // Try to match the USB device's product name with a media device label.
+          // Attempt to match the USB device with a video input.
           const devices = await navigator.mediaDevices.enumerateDevices();
           const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-          const matchingDevice = videoDevices.find(d => 
+          const matchingDevice = videoDevices.find(d =>
             d.label.toLowerCase().includes(device.productName.toLowerCase())
           );
           if (matchingDevice) {
@@ -256,7 +239,7 @@
       }
     });
 
-    // Listen for device changes (e.g., when a USB camera is plugged in).
+    // Listen for device changes.
     navigator.mediaDevices.addEventListener('devicechange', async () => {
       console.log('Device change detected, refreshing camera list.');
       await populateCameraSelect();
