@@ -92,8 +92,6 @@
     const brightness = document.getElementById('brightness');
 
     let currentStream;
-    // Global variable to hold the set of known video device IDs.
-    let previousVideoDeviceIds = new Set();
 
     // Initialize camera by first getting a stream to unlock device labels.
     async function initCamera() {
@@ -111,21 +109,21 @@
       }
     }
 
-    // Enumerate devices, populate the dropdown, and record the current video device IDs.
+    // Enumerate devices and populate the dropdown.
     async function populateCameraSelect() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter((d) => d.kind === 'videoinput');
         console.log('Video devices:', videoDevices);
         cameraSelect.replaceChildren();
+
         videoDevices.forEach((device) => {
           const option = document.createElement('option');
           option.value = device.deviceId;
           option.text = device.label || `Camera ${device.deviceId}`;
           cameraSelect.appendChild(option);
         });
-        // Save the current video device IDs.
-        previousVideoDeviceIds = new Set(videoDevices.map(d => d.deviceId));
+        // If a stream exists, set the select to match the current device.
         if (currentStream) {
           const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
           cameraSelect.value = currentDeviceId;
@@ -196,42 +194,47 @@
     usbButton.addEventListener('click', async () => {
       if ('usb' in navigator) {
         try {
-          // Record the list of current video device IDs.
-          const oldDeviceIds = new Set((await navigator.mediaDevices.enumerateDevices())
-            .filter(d => d.kind === 'videoinput')
-            .map(d => d.deviceId));
-
-          const device = await navigator.usb.requestDevice({ filters: [{ classCode: 0x0e }] });
+          // Request the USB device with both class and subclass filters.
+          const device = await navigator.usb.requestDevice({
+            filters: [{ classCode: 0x0e, subclassCode: 0x02 }]
+          });
           console.log('USB device selected:', device);
           message.textContent = 'USB camera connected successfully.';
           message.style.display = 'block';
           setTimeout(() => { message.style.display = 'none'; }, 2000);
-
-          // Wait for the new device to be registered.
+          
+          // Wait a short period for the system to register the new video input.
           await new Promise(resolve => setTimeout(resolve, 2000));
-          await populateCameraSelect();
-
-          // Get the new list of video devices.
-          const devicesAfter = (await navigator.mediaDevices.enumerateDevices())
-            .filter(d => d.kind === 'videoinput');
-
-          // Find any new device ID that was not present before.
-          let newDevice;
-          for (const d of devicesAfter) {
-            if (!oldDeviceIds.has(d.deviceId)) {
-              newDevice = d;
-              break;
+          
+          // Capture the current camera label.
+          const currentLabel = currentStream ? currentStream.getVideoTracks()[0].label : '';
+          console.log('Current stream label:', currentLabel);
+          
+          // Request a test stream (without specifying a device) to let the system choose.
+          const testStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+          });
+          const testLabel = testStream.getVideoTracks()[0].label;
+          console.log('Test stream label:', testLabel);
+          
+          if (testLabel && testLabel !== currentLabel) {
+            // Look for a matching device from enumerateDevices.
+            const devicesAfter = (await navigator.mediaDevices.enumerateDevices())
+              .filter(d => d.kind === 'videoinput');
+            const candidate = devicesAfter.find(d => d.label === testLabel);
+            if (candidate) {
+              console.log('External camera candidate found:', candidate);
+              await switchCamera(candidate.deviceId);
+            } else {
+              message.textContent = 'USB camera is connected but not recognized as a video input.';
+              message.style.display = 'block';
             }
-          }
-
-          if (newDevice) {
-            console.log('New USB video device detected:', newDevice);
-            cameraSelect.value = newDevice.deviceId;
-            await switchCamera(newDevice.deviceId);
           } else {
             message.textContent = 'USB camera is connected but not recognized as a video input.';
             message.style.display = 'block';
           }
+          // Stop test stream tracks.
+          testStream.getTracks().forEach(track => track.stop());
         } catch (error) {
           console.error('USB device request error:', error);
           message.textContent = 'Error connecting USB camera.';
