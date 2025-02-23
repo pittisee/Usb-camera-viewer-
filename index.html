@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>USB Webcam Selector</title>
+  <title>USB Webcam Selector – HD Constraints</title>
   <style>
     body {
       margin: 0;
@@ -93,7 +93,7 @@
 
     let currentStream;
 
-    // Initialize camera by first getting a stream to unlock device labels
+    // Initialize camera by first getting a stream to unlock device labels.
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -124,14 +124,12 @@
           cameraSelect.appendChild(option);
         });
 
-        // Try to detect an external camera by checking device labels for keywords.
+        // Attempt to detect an external camera using common keywords.
         const externalCamera = videoDevices.find((device) => {
           const label = device.label.toLowerCase();
-          // Exclude common integrated camera keywords.
           return label.includes('usb') || label.includes('external') || label.includes('uvc');
         });
 
-        // If an external camera is found and it isn't already active, switch to it.
         if (externalCamera && currentStream) {
           const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
           if (currentDeviceId !== externalCamera.deviceId) {
@@ -139,7 +137,6 @@
             await switchCamera(externalCamera.deviceId);
           }
         } else if (currentStream) {
-          // Ensure the dropdown reflects the current stream.
           cameraSelect.value = currentStream.getVideoTracks()[0].getSettings().deviceId;
         }
       } catch (error) {
@@ -155,8 +152,13 @@
         currentStream.getTracks().forEach((track) => track.stop());
       }
       try {
+        // Adding HD constraints for USB webcam
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } }
+          video: {
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         });
         currentStream = stream;
         video.srcObject = stream;
@@ -165,7 +167,7 @@
         updateFilters();
       } catch (error) {
         console.error('Error switching camera:', error);
-        message.textContent = 'Failed to switch camera.';
+        message.textContent = 'Failed to switch to the selected camera.';
         message.style.display = 'block';
       }
     }
@@ -192,7 +194,7 @@
     usbButton.addEventListener('click', async () => {
       if ('usb' in navigator) {
         try {
-          // Request a USB device that belongs to the video class (classCode 0x0e)
+          // Request a USB device from the video class (classCode 0x0e)
           const device = await navigator.usb.requestDevice({
             filters: [{ classCode: 0x0e }]
           });
