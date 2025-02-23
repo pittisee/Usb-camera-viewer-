@@ -1,161 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Viewer with Camera Selection</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-        }
-        #video {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 1;
-        }
-        #menu {
-            position: fixed;
-            bottom: -100px;
-            left: 0;
-            width: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 10px;
-            transition: bottom 0.5s;
-            z-index: 2;
-        }
-        #menu.show {
-            bottom: 0;
-        }
-        #menu div {
-            margin: 10px 0;
-        }
-        input[type="range"] {
-            width: 200px;
-        }
-        #message {
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 3;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webcam Viewer with Camera Selection</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    #menu {
+      position: fixed;
+      bottom: -100px;
+      left: 0;
+      width: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      transition: bottom 0.5s;
+      z-index: 2;
+    }
+    #menu.show {
+      bottom: 0;
+    }
+    #menu div {
+      margin: 10px 0;
+    }
+    input[type="range"] {
+      width: 90%;
+    }
+    #message {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 3;
+    }
+  </style>
 </head>
 <body>
-    <video id="video" autoplay></video>
-    <p id="message">Please allow camera access to view the webcam feed.</p>
-    <div id="menu">
-        <div>
-            <label for="cameraSelect">Camera:</label>
-            <select id="cameraSelect"></select>
-        </div>
-        <div>
-            <label for="saturation">Saturation:</label>
-            <input type="range" id="saturation" min="0" max="200" value="100">
-        </div>
-        <div>
-            <label for="contrast">Contrast:</label>
-            <input type="range" id="contrast" min="0" max="200" value="100">
-        </div>
-        <div>
-            <label for="brightness">Brightness:</label>
-            <input type="range" id="brightness" min="0" max="200" value="100">
-        </div>
+  <!-- Added playsinline and muted for better mobile compatibility -->
+  <video id="video" autoplay playsinline muted></video>
+  <p id="message">Please allow camera access to view the webcam feed.</p>
+  <div id="menu">
+    <div>
+      <label for="cameraSelect">Camera:</label>
+      <select id="cameraSelect"></select>
     </div>
-    <script>
-        const video = document.getElementById('video');
-        const menu = document.getElementById('menu');
-        const cameraSelect = document.getElementById('cameraSelect');
-        const saturation = document.getElementById('saturation');
-        const contrast = document.getElementById('contrast');
-        const brightness = document.getElementById('brightness');
-        const message = document.getElementById('message');
+    <div>
+      <label for="saturation">Saturation:</label>
+      <input type="range" id="saturation" min="0" max="200" value="100">
+    </div>
+    <div>
+      <label for="contrast">Contrast:</label>
+      <input type="range" id="contrast" min="0" max="200" value="100">
+    </div>
+    <div>
+      <label for="brightness">Brightness:</label>
+      <input type="range" id="brightness" min="0" max="200" value="100">
+    </div>
+  </div>
+  <script>
+    const video = document.getElementById('video');
+    const menu = document.getElementById('menu');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const saturation = document.getElementById('saturation');
+    const contrast = document.getElementById('contrast');
+    const brightness = document.getElementById('brightness');
+    const message = document.getElementById('message');
 
-        // Start with the default camera
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                video.srcObject = stream;
-                message.style.display = 'none';
-                populateCameraSelect(stream);
-            })
-            .catch(error => {
-                console.error('Error accessing webcam:', error);
-                message.textContent = 'Could not access the webcam. Please ensure it’s connected and you’ve allowed camera access.';
-            });
+    // Request the video stream with a mobile-friendly constraint (front camera by default)
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      .then(stream => {
+        video.srcObject = stream;
+        message.style.display = 'none';
+        populateCameraSelect(stream);
+      })
+      .catch(error => {
+        console.error('Error accessing webcam:', error);
+        message.textContent = 'Could not access the webcam. Please ensure it’s connected and you’ve allowed camera access.';
+      });
 
-        // Populate the camera selection dropdown
-        function populateCameraSelect(currentStream) {
-            const currentTrack = currentStream.getVideoTracks()[0];
-            const currentDeviceId = currentTrack.getSettings().deviceId;
-
-            navigator.mediaDevices.enumerateDevices()
-                .then(devices => {
-                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                    cameraSelect.innerHTML = ''; // Clear any existing options
-                    videoDevices.forEach(device => {
-                        const option = document.createElement('option');
-                        option.value = device.deviceId;
-                        option.text = device.label || `Camera ${device.deviceId}`;
-                        if (device.deviceId === currentDeviceId) {
-                            option.selected = true;
-                        }
-                        cameraSelect.appendChild(option);
-                    });
-                })
-                .catch(error => {
-                    console.error('Error listing devices:', error);
-                    message.textContent = 'Unable to list cameras.';
-                    message.style.display = 'block';
-                });
-        }
-
-        // Switch camera when a new one is selected
-        cameraSelect.addEventListener('change', () => {
-            const selectedDeviceId = cameraSelect.value;
-            video.srcObject.getTracks().forEach(track => track.stop()); // Stop current stream
-            navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: selectedDeviceId } } })
-                .then(newStream => {
-                    video.srcObject = newStream;
-                    message.style.display = 'none';
-                })
-                .catch(error => {
-                    console.error('Error switching camera:', error);
-                    message.textContent = 'Failed to switch to the selected camera.';
-                    message.style.display = 'block';
-                });
+    // Populate the camera selection dropdown
+    function populateCameraSelect(currentStream) {
+      const currentTrack = currentStream.getVideoTracks()[0];
+      const currentDeviceId = currentTrack.getSettings().deviceId;
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          cameraSelect.innerHTML = ''; // Clear existing options
+          videoDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Camera ${device.deviceId}`;
+            if (device.deviceId === currentDeviceId) {
+              option.selected = true;
+            }
+            cameraSelect.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error('Error listing devices:', error);
+          message.textContent = 'Unable to list cameras.';
+          message.style.display = 'block';
         });
+    }
 
-        // Show/hide menu on video click
-        video.addEventListener('click', () => {
-            menu.classList.toggle('show');
+    // Switch camera when a new one is selected
+    cameraSelect.addEventListener('change', () => {
+      const selectedDeviceId = cameraSelect.value;
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+      }
+      navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: selectedDeviceId } } })
+        .then(newStream => {
+          video.srcObject = newStream;
+          message.style.display = 'none';
+        })
+        .catch(error => {
+          console.error('Error switching camera:', error);
+          message.textContent = 'Failed to switch to the selected camera.';
+          message.style.display = 'block';
         });
+    });
 
-        // Prevent menu clicks from hiding the menu
-        menu.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
+    // Show/hide menu on video click
+    video.addEventListener('click', () => {
+      menu.classList.toggle('show');
+    });
 
-        // Apply filter adjustments
-        function updateFilters() {
-            video.style.filter = `saturate(${saturation.value}%) contrast(${contrast.value}%) brightness(${brightness.value}%)`;
-        }
+    // Prevent menu clicks from hiding the menu
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
 
-        // Update filters when sliders change
-        saturation.addEventListener('input', updateFilters);
-        contrast.addEventListener('input', updateFilters);
-        brightness.addEventListener('input', updateFilters);
+    // Apply filter adjustments
+    function updateFilters() {
+      video.style.filter = `saturate(${saturation.value}%) contrast(${contrast.value}%) brightness(${brightness.value}%)`;
+    }
 
-        // Apply initial filter settings
-        updateFilters();
-    </script>
+    // Update filters when sliders change
+    saturation.addEventListener('input', updateFilters);
+    contrast.addEventListener('input', updateFilters);
+    brightness.addEventListener('input', updateFilters);
+
+    // Apply initial filter settings
+    updateFilters();
+  </script>
 </body>
 </html>
