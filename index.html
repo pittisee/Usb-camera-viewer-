@@ -83,7 +83,7 @@
 
     let currentStream;
 
-    // Start video stream with minimal constraints so that all available cameras can be detected
+    // Start video stream with minimal constraints so all available cameras can be detected
     function startStream() {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
@@ -99,7 +99,7 @@
         });
     }
 
-    // Populate the camera selection dropdown and check for external USB cameras
+    // Populate the camera selection dropdown and search for connected USB devices
     function populateCameraSelect() {
       navigator.mediaDevices.enumerateDevices()
         .then(devices => {
@@ -111,8 +111,9 @@
             option.value = device.deviceId;
             option.text = device.label || `Camera ${device.deviceId}`;
             cameraSelect.appendChild(option);
-            // Check if the device label contains 'usb'
-            if (device.label && device.label.toLowerCase().includes('usb')) {
+            // Check if the device label contains keywords indicating it's a USB camera
+            const lowerLabel = device.label.toLowerCase();
+            if (lowerLabel.includes('usb') || lowerLabel.includes('uvc')) {
               externalDeviceId = device.deviceId;
             }
           });
@@ -120,7 +121,7 @@
           if (currentStream) {
             const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
             cameraSelect.value = currentDeviceId;
-            // If an external USB camera is detected and it's not already in use, switch to it
+            // If an external USB camera is detected and not already active, switch to it
             if (externalDeviceId && currentDeviceId !== externalDeviceId) {
               cameraSelect.value = externalDeviceId;
               switchCamera(externalDeviceId);
