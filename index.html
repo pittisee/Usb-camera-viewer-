@@ -8,6 +8,7 @@
     body {
       margin: 0;
       overflow: hidden;
+      font-family: sans-serif;
     }
     #video {
       position: fixed;
@@ -20,7 +21,7 @@
     }
     #menu {
       position: fixed;
-      bottom: -100px;
+      bottom: -140px;
       left: 0;
       width: 100%;
       background-color: rgba(0, 0, 0, 0.7);
@@ -48,16 +49,22 @@
       border-radius: 5px;
       z-index: 3;
     }
+    #refreshButton {
+      margin-top: 10px;
+      padding: 5px 10px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <!-- Added playsinline and muted for mobile compatibility -->
+  <!-- playsinline and muted are added for mobile compatibility -->
   <video id="video" autoplay playsinline muted></video>
   <p id="message">Please allow camera access to view the webcam feed.</p>
   <div id="menu">
     <div>
       <label for="cameraSelect">Camera:</label>
       <select id="cameraSelect"></select>
+      <button id="refreshButton">Refresh Cameras</button>
     </div>
     <div>
       <label for="saturation">Saturation:</label>
@@ -80,10 +87,11 @@
     const contrast = document.getElementById('contrast');
     const brightness = document.getElementById('brightness');
     const message = document.getElementById('message');
+    const refreshButton = document.getElementById('refreshButton');
 
     let currentStream;
 
-    // Start video stream with minimal constraints so all available cameras can be detected
+    // Start video stream with minimal constraints so all available cameras can be detected.
     function startStream() {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
@@ -92,6 +100,7 @@
           message.style.display = 'none';
           populateCameraSelect();
           updateFilters();
+          checkUSBDevices(); // Check for USB devices via WebUSB API.
         })
         .catch(error => {
           console.error('Error accessing webcam:', error);
@@ -99,11 +108,12 @@
         });
     }
 
-    // Populate the camera selection dropdown and search for connected USB devices
+    // Enumerate video devices and populate the dropdown.
     function populateCameraSelect() {
       navigator.mediaDevices.enumerateDevices()
         .then(devices => {
           const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          console.log("Enumerated video devices:", videoDevices);
           cameraSelect.innerHTML = '';
           let externalDeviceId = null;
           videoDevices.forEach(device => {
@@ -111,31 +121,32 @@
             option.value = device.deviceId;
             option.text = device.label || `Camera ${device.deviceId}`;
             cameraSelect.appendChild(option);
-            // Check if the device label contains keywords indicating it's a USB camera
+            // Look for keywords indicating an external USB camera.
             const lowerLabel = device.label.toLowerCase();
-            if (lowerLabel.includes('usb') || lowerLabel.includes('uvc')) {
+            if (lowerLabel.includes('usb') || lowerLabel.includes('uvc') || lowerLabel.includes('external')) {
               externalDeviceId = device.deviceId;
             }
           });
-          // Set the selected option based on the current stream
+          // If a stream is active, select its device.
           if (currentStream) {
             const currentDeviceId = currentStream.getVideoTracks()[0].getSettings().deviceId;
             cameraSelect.value = currentDeviceId;
-            // If an external USB camera is detected and not already active, switch to it
+            // If an external USB camera is detected and it's not active, try switching to it.
             if (externalDeviceId && currentDeviceId !== externalDeviceId) {
+              console.log("External USB camera detected. Switching to it.");
               cameraSelect.value = externalDeviceId;
               switchCamera(externalDeviceId);
             }
           }
         })
         .catch(error => {
-          console.error('Error listing devices:', error);
+          console.error('Error enumerating devices:', error);
           message.textContent = 'Unable to list cameras.';
           message.style.display = 'block';
         });
     }
 
-    // Switch camera to the selected device
+    // Switch the camera to the specified device.
     function switchCamera(deviceId) {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
@@ -145,7 +156,6 @@
           currentStream = stream;
           video.srcObject = stream;
           message.style.display = 'none';
-          // Refresh the device list so labels update correctly
           populateCameraSelect();
           updateFilters();
         })
@@ -156,32 +166,68 @@
         });
     }
 
-    // Update filter effects on the video element
+    // Update video filters.
     function updateFilters() {
       video.style.filter = `saturate(${saturation.value}%) contrast(${contrast.value}%) brightness(${brightness.value}%)`;
     }
 
-    // Event listeners for filter adjustments and camera selection
+    // Check for connected USB devices using the WebUSB API.
+    function checkUSBDevices() {
+      if ('usb' in navigator) {
+        navigator.usb.getDevices()
+          .then(usbDevices => {
+            if (usbDevices.length > 0) {
+              console.log("USB devices found via WebUSB:");
+              usbDevices.forEach(device => {
+                console.log(`Product: ${device.productName}, Vendor: ${device.vendorId}, Product ID: ${device.productId}`);
+              });
+            } else {
+              console.log("No USB devices found via WebUSB.");
+            }
+          })
+          .catch(error => {
+            console.error("Error enumerating USB devices:", error);
+          });
+      } else {
+        console.log("WebUSB API not supported in this browser.");
+      }
+    }
+
+    // Event listeners for filter adjustments.
     saturation.addEventListener('input', updateFilters);
     contrast.addEventListener('input', updateFilters);
     brightness.addEventListener('input', updateFilters);
 
+    // Change camera when the selection is changed.
     cameraSelect.addEventListener('change', () => {
       const selectedDeviceId = cameraSelect.value;
       switchCamera(selectedDeviceId);
     });
 
-    // Toggle the settings menu when video is clicked
+    // Toggle the settings menu when the video is clicked.
     video.addEventListener('click', () => {
       menu.classList.toggle('show');
     });
 
-    // Prevent clicks on the menu from closing it
+    // Prevent clicks on the menu from closing it.
     menu.addEventListener('click', (e) => {
       e.stopPropagation();
     });
 
-    // Start the stream when the page loads
+    // Refresh button to re-enumerate devices.
+    refreshButton.addEventListener('click', () => {
+      populateCameraSelect();
+      checkUSBDevices();
+    });
+
+    // Listen for device changes (e.g., plugging in a USB camera).
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      console.log("Device change detected. Refreshing camera list.");
+      populateCameraSelect();
+      checkUSBDevices();
+    });
+
+    // Start the stream when the page loads.
     startStream();
   </script>
 </body>
