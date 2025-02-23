@@ -148,30 +148,50 @@
     }
 
     // Switch the active camera by stopping the current stream and starting a new one.
+    // First, it tries with HD constraints; if that fails, it falls back to default constraints.
     async function switchCamera(deviceId) {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
-        // Explicitly clear the current stream reference after stopping tracks.
         currentStream = null;
       }
       try {
-        // Adding HD constraints for USB webcam
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraintsHD = {
           video: {
             deviceId: { exact: deviceId },
             width: { ideal: 1280 },
             height: { ideal: 720 }
           }
-        });
+        };
+        let stream = await navigator.mediaDevices.getUserMedia(constraintsHD);
         currentStream = stream;
         video.srcObject = stream;
         message.style.display = 'none';
         await populateCameraSelect();
         updateFilters();
       } catch (error) {
-        console.error('Error switching camera:', error);
-        message.textContent = 'Failed to switch to the selected camera.';
-        message.style.display = 'block';
+        console.error('Error switching camera with HD constraints:', error);
+        // Fallback: try without HD constraints if HD fails.
+        try {
+          const fallbackConstraints = {
+            video: {
+              deviceId: { exact: deviceId }
+            }
+          };
+          let stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          currentStream = stream;
+          video.srcObject = stream;
+          message.textContent = 'HD constraints not supported; using default resolution.';
+          message.style.display = 'block';
+          setTimeout(() => {
+            message.style.display = 'none';
+          }, 2000);
+          await populateCameraSelect();
+          updateFilters();
+        } catch (fallbackError) {
+          console.error('Error switching camera with fallback constraints:', fallbackError);
+          message.textContent = 'Failed to switch to the selected camera.';
+          message.style.display = 'block';
+        }
       }
     }
 
